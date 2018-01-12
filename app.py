@@ -7,6 +7,7 @@
 from flask import Flask, abort, request
 from functools import wraps
 import MySQLdb as mdb
+import sys
 import json
 
 app = Flask(__name__)
@@ -23,7 +24,8 @@ unauth_str = "Unauthorized"
 def auth_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = ''
+        token = request.headers.get('auth-token')
+        print("token: %s" % (token,)) # DEBUG
         if not verify_token(token):
             return unauth_str
         return f(*args, **kwargs)
@@ -32,7 +34,6 @@ def auth_required(f):
 
 @app.route("/")
 def default():
-    global err_msg
     return err_msg
 
 
@@ -43,21 +44,39 @@ def gen_auth_token():
 
 
 @app.route('/register_event', methods=['POST'])
+@auth_required
 def register_event():
     ''' Register event (either 'entry' or 'exit')
-        from a user device
-    '''
-    data = request.data
+        from a user device '''
+    try:
+        print(request.data)
+        data = json.loads(request.data)
+        event_type = data['eventType']
+        # TODO: check if deviceID matches token or
+        #       get deviceID using token from db
+        device_Id = data['deviceID']
+    except ValueError as e:
+        return "JSON malformed1"
+    except KeyError as e:
+        return "JSON malformed2"
+
     creds = fetch_credentials()
-    sql = "SELECT VERSION();"
+    sql = ("""INSERT INTO `DeviceEvents`
+            (`DeviceID`, `EventType`)
+            VALUES (%s, %s); """)
     conn = None
     try:
         conn = mdb.connect(*creds) # unpack creds into params
+
         cursor = conn.cursor()
-        cursor.execute(sql)
+        # NOTE: this syntax sanitizes the input for SQL injection
+        cursor.execute(sql, (device_Id, event_type))
+        conn.commit()
     except mdb.Error, e:
-        print "Error %d: %s" % (e.args[0],e.args[1])
-        sys.exit(1)
+        print("Error %d: %s" % (e.args[0],e.args[1]))
+        if conn:
+            conn.rollback()
+        return ""
     finally:
         if conn:
             conn.close()
@@ -71,9 +90,11 @@ def register_event():
 ######################
 
 def verify_token(t):
-    return False
+    ''' Verify authorization token '''
+    return True
 
 def fetch_credentials():
+    ''' Get SQL credentials from config file '''
     data = json.load(open('config.json'))
     return (data['server'], data['user'],
             data['pass'], data['db'])

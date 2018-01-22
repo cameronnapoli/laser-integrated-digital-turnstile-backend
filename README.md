@@ -17,10 +17,15 @@ python app.py
 ## API
 
 ### Register Event
+
+#### URL
 ```
 /register_event
 ```
-POST request
+
+#### Type
+POST
+
 #### Headers
 ```
 auth-token : for now leave as empty string

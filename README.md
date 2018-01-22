@@ -24,7 +24,10 @@ python app.py
 ```
 
 #### Type
+
+```
 POST
+```
 
 #### Headers
 ```

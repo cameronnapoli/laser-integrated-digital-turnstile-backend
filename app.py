@@ -56,9 +56,9 @@ def register_event():
         #       get deviceID using token from db
         device_Id = data['deviceID']
     except ValueError as e:
-        return "JSON malformed1"
+        return "JSON malformed (JSON cannot be decoded)"
     except KeyError as e:
-        return "JSON malformed2"
+        return "JSON malformed (Missing required key in object)"
 
     creds = fetch_credentials()
     sql = ("""INSERT INTO `DeviceEvents`

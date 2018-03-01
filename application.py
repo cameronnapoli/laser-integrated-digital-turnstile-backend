@@ -66,6 +66,8 @@ def register_event():
     sql = ("""INSERT INTO `DeviceEvents`
             (`DeviceID`, `EventType`)
             VALUES (%s, %s); """)
+
+    # TODO: use sql_select
     conn = None
     try:
         conn = mdb.connect(*creds) # unpack creds into params
@@ -142,7 +144,6 @@ def debug_preview():
 @auth_required
 def data_dump():
     """ fetch all raw data from events table """
-
     sql = """
         SELECT `DeviceID`, `CreatedDate`, `EventType`
         FROM `DeviceEvents`
@@ -159,16 +160,28 @@ def data_dump():
 #########################
 
 @application.route('/GetAllClientDevices', methods=['GET'])
-def GetAllClientDevices(clientId):
+def GetAllClientDevices():
     """ Get all devices associated with a certain client """
-    pass
+
+    clientId = request.args['client_id']
+
+    sql = """ SELECT * FROM `Device`
+    WHERE `ClientID`=%s """
+
+    results = sql_select(sql, (clientId,))
+    return str(results)
 
 
 @application.route('/GetCurrentOccupantsCount', methods=['GET'])
 def GetCurrentOccupantsCount(clientId):
     """ Get the number of people in location on this day
         (inCount - outCount) """
+    # clientId = request.args['client_id']
     pass
+
+    # need to fetch devices for a certain clientId,
+    # then get the device events for today.
+    # calculate the current occupants from entries and exits
 
 
 # @application.route('/GetDeviceCount', methods=['GET'])
@@ -188,12 +201,14 @@ def GetDeviceCount(deviceId, starttime, endtime):
 #     """ Get information about device/battery percent """
 #     pass
 
-@application.route('/GetDeviceStatus', methods=['GET'])
+@application.route('/DeviceInBusinessHours', methods=['GET'])
 def DeviceInBusinessHours(deviceId):
     """ Request to check if a device is in business hours
         deviceId: int
     """
     pass
+    # reference device with associated client
+    # then check `ClientBusinessHours` table to see if device in business hours
 
 
 
@@ -221,22 +236,28 @@ def sql_insert(sql_str, params=None):
             conn.close()
 
 
-def sql_select(sql_str, params):
+def sql_select(sql_str, params=None):
     """ Helper function to run SQL SELECT query """
     creds = fetch_credentials()
     conn = None
+    results = []
     try:
         conn = mdb.connect(*creds) # unpack creds into params
         cursor = conn.cursor()
-        results = cursor.execute(sql_str, params)
-        return cursor.fetchall()
+        if params:
+            cursor.execute(sql_str, params)
+            results = cursor.fetchall()
+        else:
+            cursor.execute(sql_str)
+            results = cursor.fetchall()
     except mdb.Error, e:
         print("SQL SELECT Error %d: %s" % (e.args[0],e.args[1]))
         # return "SQL SELECT Error %d: %s" % (e.args[0],e.args[1])
     finally:
         if conn:
             conn.close()
-    return []
+    # print("SQL results: %s" % (results, ))
+    return results
 
 
 def verify_token(t):
@@ -253,7 +274,21 @@ def fetch_credentials():
             os.environ['MYSQL_DB'])
 
 
+def set_debug_db():
+    """ Point db to local db if on debug """
+    os.environ['MYSQL_SERVER'] = '127.0.0.1'
+    os.environ['MYSQL_USER'] = 'root'
+    os.environ['MYSQL_PASS'] = ''
+    os.environ['MYSQL_DB'] = 'lidt'
+
 
 if __name__ == "__main__":
+    port_num = 80
+
+    if len(sys.argv) > 1:
+        if sys.argv[1] == '-debug':
+            set_debug_db()
+            port_num = 5000
+
     application.debug = True
-    application.run(port=80)
+    application.run(port=port_num)

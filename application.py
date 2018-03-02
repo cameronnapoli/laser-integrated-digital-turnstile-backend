@@ -50,7 +50,7 @@ def register_event():
     """ Register event (either 'entry' or 'exit')
         from a user device """
     try:
-        print(request.data)
+        # print(request.data)
         data = json.loads(request.data)
         event_type = data['eventType']
         # TODO: check if deviceID matches token or
@@ -67,22 +67,7 @@ def register_event():
             (`DeviceID`, `EventType`)
             VALUES (%s, %s); """)
 
-    # TODO: use sql_select
-    conn = None
-    try:
-        conn = mdb.connect(*creds) # unpack creds into params
-        cursor = conn.cursor()
-        # NOTE: this syntax sanitizes the input for SQL injection
-        cursor.execute(sql, (device_Id, event_type))
-        conn.commit()
-    except mdb.Error, e:
-        print("Error %d: %s" % (e.args[0],e.args[1]))
-        if conn:
-            conn.rollback()
-        return ""
-    finally:
-        if conn:
-            conn.close()
+    sql_insert(sql, (device_Id, event_type))
 
     return "register_event success"
 
@@ -169,19 +154,58 @@ def GetAllClientDevices():
     WHERE `ClientID`=%s """
 
     results = sql_select(sql, (clientId,))
+
+    # NOTE: what data does Raymond want from this query
     return str(results)
 
 
 @application.route('/GetCurrentOccupantsCount', methods=['GET'])
-def GetCurrentOccupantsCount(clientId):
+def GetCurrentOccupantsCount():
     """ Get the number of people in location on this day
         (inCount - outCount) """
-    # clientId = request.args['client_id']
-    pass
+    clientId = request.args['client_id']
+    today_start = datetime.utcnow().strftime("%Y-%m-%d 00:00:00")
+    today_end = datetime.utcnow().strftime("%Y-%m-%d 23:59:59")
 
-    # need to fetch devices for a certain clientId,
-    # then get the device events for today.
-    # calculate the current occupants from entries and exits
+    sql = """
+    SELECT `DeviceEvents`.`EventType`
+    FROM `Device`
+    INNER JOIN `DeviceEvents`
+    ON `Device`.`DeviceID`=`DeviceEvents`.`DeviceID`
+      WHERE `Device`.`ClientID`=%s
+        AND `DeviceEvents`.`CreatedDate` > %s
+        AND `DeviceEvents`.`CreatedDate` < %s;
+    """
+
+    results = sql_select(sql, (clientId, today_start, today_end))
+    exit_count, entry_count, incrt_count = 0, 0, 0
+
+    for row in results:
+        eventType = row[0]
+        if eventType == 'entry':
+            entry_count += 1
+        elif eventType == 'exit':
+            exit_count += 1
+        else:
+            incrt_count += 1
+
+
+    num_people = entry_count - exit_count
+
+    success = 1
+    if num_people < 0:
+        success = 0
+
+    ret = {
+        'date': today_start,
+        'success' : success,
+        'num_people': num_people,
+        'entries': entry_count,
+        'exits': exit_count
+    }
+
+    return json.dumps(ret)
+
 
 
 # @application.route('/GetDeviceCount', methods=['GET'])
@@ -190,10 +214,10 @@ def GetCurrentOccupantsCount(clientId):
 #     pass
 
 
-@application.route('/GetDeviceCount', methods=['GET'])
-def GetDeviceCount(deviceId, starttime, endtime):
-    """ Get device events over a certain time range """
-    pass
+# @application.route('/GetDeviceCount', methods=['GET'])
+# def GetDeviceCount(deviceId, starttime, endtime):
+#     """ Get device events over a certain time range """
+#     pass
 
 
 # @application.route('/GetDeviceStatus', methods=['GET'])

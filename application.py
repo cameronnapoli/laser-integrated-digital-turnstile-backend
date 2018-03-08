@@ -150,13 +150,24 @@ def GetAllClientDevices():
 
     clientId = request.args['client_id']
 
-    sql = """ SELECT * FROM `Device`
+    sql = """ SELECT `DeviceID`, `ClientID`, `Name`, `MACAddress`, `Location`
+    FROM `Device`
     WHERE `ClientID`=%s """
 
     results = sql_select(sql, (clientId,))
 
-    # NOTE: what data does Raymond want from this query
-    return str(results)
+    res = []
+    for row in results:
+        res.append({
+            "DeviceID" : row[0],
+            "ClientID": row[1],
+            "Name": row[2],
+            "MACAddress": row[3],
+            "Location": row[4]
+        })
+
+
+    return json.dumps(res)
 
 
 @application.route('/GetCurrentOccupantsCount', methods=['GET'])
@@ -164,8 +175,9 @@ def GetCurrentOccupantsCount():
     """ Get the number of people in location on this day
         (inCount - outCount) """
     clientId = request.args['client_id']
-    today_start = datetime.utcnow().strftime("%Y-%m-%d 00:00:00")
-    today_end = datetime.utcnow().strftime("%Y-%m-%d 23:59:59")
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today_start = today + " 00:00:00"
+    today_end = today + " 23:59:59"
 
     sql = """
     SELECT `DeviceEvents`.`EventType`
@@ -197,7 +209,7 @@ def GetCurrentOccupantsCount():
         success = 0
 
     ret = {
-        'date': today_start,
+        'date': today,
         'success' : success,
         'num_people': num_people,
         'entries': entry_count,
@@ -276,6 +288,7 @@ def sql_select(sql_str, params=None):
             results = cursor.fetchall()
     except mdb.Error, e:
         print("SQL SELECT Error %d: %s" % (e.args[0],e.args[1]))
+        # THROW EXCEPTION
         # return "SQL SELECT Error %d: %s" % (e.args[0],e.args[1])
     finally:
         if conn:

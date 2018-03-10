@@ -130,17 +130,16 @@ def debug_preview():
     return html_page % html_content
 
 
-@application.route('/data_dump', methods=['GET', 'POST'])
-@auth_required
-def data_dump():
-    """ fetch all raw data from events table """
-    sql = """
-        SELECT `DeviceID`, `CreatedDate`, `EventType`
-        FROM `DeviceEvents`
-        ORDER BY `CreatedDate` DESC;
-        """
-    results = sql_select(sql)
-    return str(results)
+# @application.route('/data_dump', methods=['GET', 'POST'])
+# @auth_required
+# def data_dump():
+#     """ fetch all raw data from events table """
+#     sql = """
+#         SELECT `DeviceID`, `CreatedDate`, `EventType`
+#         FROM `DeviceEvents` ORDER BY `CreatedDate` DESC;
+#         """
+#     results = sql_select(sql)
+#     return str(results)
 
 
 
@@ -153,33 +152,33 @@ def data_dump():
 def GetAllClientDevices():
     """ Get all devices associated with a certain client """
 
-    clientId = request.args['client_id']
+    clientId = request.args['clientId']
 
-    # verify client_id is an int
     try:
         clientId = str(int(clientId))
     except ValueError:
         return fail_response("client_id must be an integer")
 
     sql = """ SELECT Device.DeviceID, DeviceEvents.EventType, COUNT(*)
-                FROM Device
-                INNER JOIN
-                DeviceEvents
+                FROM Device INNER JOIN DeviceEvents
                 ON Device.DeviceID=DeviceEvents.DeviceID
                 WHERE Device.ClientID=%s
                 AND DeviceEvents.CreatedDate > %s
                 AND DeviceEvents.CreatedDate < %s
-                GROUP BY Device.DeviceID, DeviceEvents.EventType
-                ORDER BY Device.DeviceID, DeviceEvents.EventType """
+                GROUP BY Device.DeviceID, DeviceEvents.EventType """
 
     today = datetime.utcnow().strftime("%Y-%m-%d")
+
+
+    today = "2018-03-02" # DEBUG
+
+
     today_start = today + " 00:00:00"
     today_end = today + " 23:59:59"
 
     results = sql_select(sql, (clientId, today_start, today_end))
 
-    res = []
-    res_temp = {}
+    res, res_temp = [], {}
 
     for row in results:
         deviceId = row[0]
@@ -189,9 +188,9 @@ def GetAllClientDevices():
                 "exits": 0
             }
         if row[1] == 'entry':
-            res_temp[deviceId]["entries"] += 1
+            res_temp[deviceId]["entries"] = row[2]
         elif row[1] == 'exit':
-            res_temp[deviceId]["exits"] += 1
+            res_temp[deviceId]["exits"] = row[2]
         else:
             print("ERROR: EventType (%s) is not valid" % row[1])
 
@@ -205,66 +204,148 @@ def GetAllClientDevices():
     return json.dumps(res)
 
 
-@application.route('/GetCurrentOccupantsCount', methods=['GET'])
-def GetCurrentOccupantsCount():
-    """ Get the number of people in location on this day
-        (inCount - outCount) """
-    clientId = request.args['client_id']
+@application.route('/GetDeviceCount', methods=['GET'])
+def GetDeviceCount():
+    """ Get the device count for today """
+
+    deviceId = request.args['deviceId']
+
+    try:
+        clientId = str(int(deviceId))
+    except ValueError:
+        return fail_response("device_id must be an integer")
+
+    sql = """ SELECT DeviceID, EventType, COUNT(*)
+                FROM DeviceEvents
+                WHERE DeviceID=%s AND CreatedDate > %s AND CreatedDate < %s
+                GROUP BY DeviceID, EventType """
+
     today = datetime.utcnow().strftime("%Y-%m-%d")
+
+
+
+    today = "2018-03-02" # DEBUG
+
+
+
     today_start = today + " 00:00:00"
     today_end = today + " 23:59:59"
 
-    sql = """
-    SELECT `DeviceEvents`.`EventType`
-    FROM `Device`
-    INNER JOIN `DeviceEvents`
-    ON `Device`.`DeviceID`=`DeviceEvents`.`DeviceID`
-      WHERE `Device`.`ClientID`=%s
-        AND `DeviceEvents`.`CreatedDate` > %s
-        AND `DeviceEvents`.`CreatedDate` < %s;
-    """
-
     results = sql_select(sql, (clientId, today_start, today_end))
-    exit_count, entry_count, incrt_count = 0, 0, 0
+
+    res, res_temp = [], {}
 
     for row in results:
-        eventType = row[0]
-        if eventType == 'entry':
-            entry_count += 1
-        elif eventType == 'exit':
-            exit_count += 1
+        deviceId = row[0]
+        if not deviceId in res_temp:
+            res_temp[deviceId] = {
+                "entries": 0,
+                "exits": 0
+            }
+        if row[1] == 'entry':
+            res_temp[deviceId]["entries"] = row[2]
+        elif row[1] == 'exit':
+            res_temp[deviceId]["exits"] = row[2]
         else:
-            incrt_count += 1
+            print("ERROR: EventType (%s) is not valid" % row[1])
+
+    for k in res_temp:
+        res.append({
+            "DeviceId": k,
+            "Entries": res_temp[k]["entries"],
+	        "Exits": res_temp[k]["exits"]
+        })
+
+    return json.dumps(res)
 
 
-    num_people = entry_count - exit_count
-
-    success = 1
-    if num_people < 0:
-        success = 0
-
-    ret = {
-        'date': today,
-        'success' : success,
-        'num_people': num_people,
-        'entries': entry_count,
-        'exits': exit_count
-    }
-
-    return json.dumps(ret)
+@application.route('/GetAllDeviceCountHistory', methods=['GET'])
+def GetAllDeviceCountHistory():
+    """ parameters:
+            clientId,
+            interval,
+            startTime,
+            endTime,
+            month
+    """
+    return ""
 
 
+@application.route('/AddDevice', methods=['POST'])
+def AddDevice():
+    """ parameters:
+            deviceId,
+            name,
+            location,
+            MACAddress
+    """
+    return ""
 
-# @application.route('/GetDeviceCount', methods=['GET'])
-# def GetDeviceCount(deviceId):
-#     """  """
-#     pass
+@application.route('/AddUser', methods=['POST'])
+def AddUser():
+    """  """
+    return ""
 
 
-# @application.route('/GetDeviceCount', methods=['GET'])
-# def GetDeviceCount(deviceId, starttime, endtime):
-#     """ Get device events over a certain time range """
-#     pass
+@application.route('/GetBusinessHours', methods=['GET'])
+def GetBusinessHours():
+    """  """
+    return ""
+
+
+@application.route('/UpdateBusinessHours', methods=['POST'])
+def UpdateBusinessHours():
+    """  """
+    return ""
+
+
+# @application.route('/GetCurrentOccupantsCount', methods=['GET'])
+# def GetCurrentOccupantsCount():
+#     """ Get the number of people in location on this day
+#         (inCount - outCount) """
+#     clientId = request.args['client_id']
+#     today = datetime.utcnow().strftime("%Y-%m-%d")
+#     today_start = today + " 00:00:00"
+#     today_end = today + " 23:59:59"
+#
+#     sql = """
+#     SELECT `DeviceEvents`.`EventType`
+#     FROM `Device`
+#     INNER JOIN `DeviceEvents`
+#     ON `Device`.`DeviceID`=`DeviceEvents`.`DeviceID`
+#       WHERE `Device`.`ClientID`=%s
+#         AND `DeviceEvents`.`CreatedDate` > %s
+#         AND `DeviceEvents`.`CreatedDate` < %s;
+#     """
+#
+#     results = sql_select(sql, (clientId, today_start, today_end))
+#     exit_count, entry_count, incrt_count = 0, 0, 0
+#
+#     for row in results:
+#         eventType = row[0]
+#         if eventType == 'entry':
+#             entry_count += 1
+#         elif eventType == 'exit':
+#             exit_count += 1
+#         else:
+#             incrt_count += 1
+#
+#
+#     num_people = entry_count - exit_count
+#
+#     success = 1
+#     if num_people < 0:
+#         success = 0
+#
+#     ret = {
+#         'date': today,
+#         'success' : success,
+#         'num_people': num_people,
+#         'entries': entry_count,
+#         'exits': exit_count
+#     }
+#
+#     return json.dumps(ret)
 
 
 # @application.route('/GetDeviceStatus', methods=['GET'])
@@ -272,14 +353,14 @@ def GetCurrentOccupantsCount():
 #     """ Get information about device/battery percent """
 #     pass
 
-@application.route('/DeviceInBusinessHours', methods=['GET'])
-def DeviceInBusinessHours(deviceId):
-    """ Request to check if a device is in business hours
-        deviceId: int
-    """
-    pass
-    # reference device with associated client
-    # then check `ClientBusinessHours` table to see if device in business hours
+# @application.route('/DeviceInBusinessHours', methods=['GET'])
+# def DeviceInBusinessHours(deviceId):
+#     """ Request to check if a device is in business hours
+#         deviceId: int
+#     """
+#     pass
+#     # reference device with associated client
+#     # then check `ClientBusinessHours` table to see if device in business hours
 
 
 

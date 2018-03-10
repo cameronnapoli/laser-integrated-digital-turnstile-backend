@@ -15,6 +15,11 @@ application = Flask(__name__)
 
 err_msg = "Invalid Endpoint"
 unauth_str = "Unauthorized"
+def fail_response(msg):
+    return json.dumps({
+        "success": False,
+        "error": msg
+    })
 
 
 ###################
@@ -150,22 +155,52 @@ def GetAllClientDevices():
 
     clientId = request.args['client_id']
 
-    sql = """ SELECT `DeviceID`, `ClientID`, `Name`, `MACAddress`, `Location`
-    FROM `Device`
-    WHERE `ClientID`=%s """
+    # verify client_id is an int
+    try:
+        clientId = str(int(clientId))
+    except ValueError:
+        return fail_response("client_id must be an integer")
 
-    results = sql_select(sql, (clientId,))
+    sql = """ SELECT Device.DeviceID, DeviceEvents.EventType, COUNT(*)
+                FROM Device
+                INNER JOIN
+                DeviceEvents
+                ON Device.DeviceID=DeviceEvents.DeviceID
+                WHERE Device.ClientID=%s
+                AND DeviceEvents.CreatedDate > %s
+                AND DeviceEvents.CreatedDate < %s
+                GROUP BY Device.DeviceID, DeviceEvents.EventType
+                ORDER BY Device.DeviceID, DeviceEvents.EventType """
+
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today_start = today + " 00:00:00"
+    today_end = today + " 23:59:59"
+
+    results = sql_select(sql, (clientId, today_start, today_end))
 
     res = []
-    for row in results:
-        res.append({
-            "DeviceID" : row[0],
-            "ClientID": row[1],
-            "Name": row[2],
-            "MACAddress": row[3],
-            "Location": row[4]
-        })
+    res_temp = {}
 
+    for row in results:
+        deviceId = row[0]
+        if not deviceId in res_temp:
+            res_temp[deviceId] = {
+                "entries": 0,
+                "exits": 0
+            }
+        if row[1] == 'entry':
+            res_temp[deviceId]["entries"] += 1
+        elif row[1] == 'exit':
+            res_temp[deviceId]["exits"] += 1
+        else:
+            print("ERROR: EventType (%s) is not valid" % row[1])
+
+    for k in res_temp:
+        res.append({
+            "DeviceId": k,
+            "Entries": res_temp[k]["entries"],
+	        "Exits": res_temp[k]["exits"]
+        })
 
     return json.dumps(res)
 

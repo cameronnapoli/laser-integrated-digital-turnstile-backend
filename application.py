@@ -170,7 +170,7 @@ def GetAllClientDevices():
     today = datetime.utcnow().strftime("%Y-%m-%d")
 
 
-    today = "2018-03-02" # DEBUG
+    # today = "2018-03-02" # DEBUG
 
 
     today_start = today + " 00:00:00"
@@ -224,7 +224,7 @@ def GetDeviceCount():
 
 
 
-    today = "2018-03-02" # DEBUG
+    # today = "2018-03-02" # DEBUG
 
 
 
@@ -261,23 +261,25 @@ def GetDeviceCount():
 
 @application.route('/GetAllDeviceCountHistory', methods=['GET'])
 def GetAllDeviceCountHistory():
-    """ parameters:
-            clientId,
-            interval,
-            startTime,
-            endTime,
-            month
+    """ parameters
+        ------------------------
+            clientId :
+            interval :
+            startTime :
+            endTime :
+            mont :
     """
     return ""
 
 
 @application.route('/AddDevice', methods=['POST'])
 def AddDevice():
-    """ parameters:
-            deviceId,
-            name,
-            location,
-            MACAddress
+    """ parameters
+        ------------------------
+            deviceId :
+            name :
+            location :
+            MACAddress :
     """
     return ""
 
@@ -297,6 +299,13 @@ def GetBusinessHours():
 def UpdateBusinessHours():
     """  """
     return ""
+
+
+
+
+# ENDPOINT TO AUTHENTICATE USERS
+
+
 
 
 # @application.route('/GetCurrentOccupantsCount', methods=['GET'])
@@ -404,8 +413,7 @@ def sql_select(sql_str, params=None):
             results = cursor.fetchall()
     except mdb.Error, e:
         print("SQL SELECT Error %d: %s" % (e.args[0],e.args[1]))
-        # THROW EXCEPTION
-        # return "SQL SELECT Error %d: %s" % (e.args[0],e.args[1])
+        # TODO: THROW EXCEPTION
     finally:
         if conn:
             conn.close()

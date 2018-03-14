@@ -1,25 +1,26 @@
 # Flask API for LIDT
 #
-# Written by:
-#   Cameron Napoli
+# Written by: Cameron Napoli
 
 from flask import Flask, abort, request
+from flask_cors import CORS, cross_origin
 from functools import wraps
 import MySQLdb as mdb
-import sys
-import json
-import os
-from datetime import datetime
+from datetime import datetime, timedelta
+from calendar import monthrange
+import sys, os, json, math
+
 
 application = Flask(__name__)
+CORS(application) # allow cross-origin requests
 
 err_msg = "Invalid Endpoint"
 unauth_str = "Unauthorized"
 def fail_response(msg):
-    return json.dumps({
-        "success": False,
-        "error": msg
-    })
+    return json.dumps({ "success": False,
+                        "error"  : str(msg) })
+def success_response():
+    return json.dumps({ "success": True })
 
 
 ###################
@@ -54,12 +55,10 @@ def gen_auth_token():
 def register_event():
     """ Register event (either 'entry' or 'exit')
         from a user device """
+    # TODO: token based authentication
     try:
-        # print(request.data)
         data = json.loads(request.data)
         event_type = data['eventType']
-        # TODO: check if deviceID matches token or
-        #       get deviceID using token from db
         device_Id = data['deviceID']
     except ValueError as e:
         return "JSON malformed (JSON cannot be decoded)"
@@ -130,17 +129,6 @@ def debug_preview():
     return html_page % html_content
 
 
-# @application.route('/data_dump', methods=['GET', 'POST'])
-# @auth_required
-# def data_dump():
-#     """ fetch all raw data from events table """
-#     sql = """
-#         SELECT `DeviceID`, `CreatedDate`, `EventType`
-#         FROM `DeviceEvents` ORDER BY `CreatedDate` DESC;
-#         """
-#     results = sql_select(sql)
-#     return str(results)
-
 
 
 
@@ -150,7 +138,7 @@ def debug_preview():
 
 @application.route('/GetAllClientDevices', methods=['GET'])
 def GetAllClientDevices():
-    """ Get all devices associated with a certain client """
+    """ Just return devices associated with a client """
 
     clientId = request.args['clientId']
 
@@ -159,49 +147,87 @@ def GetAllClientDevices():
     except ValueError:
         return fail_response("client_id must be an integer")
 
-    sql = """ SELECT Device.DeviceID, DeviceEvents.EventType, COUNT(*)
-                FROM Device INNER JOIN DeviceEvents
-                ON Device.DeviceID=DeviceEvents.DeviceID
-                WHERE Device.ClientID=%s
-                AND DeviceEvents.CreatedDate > %s
-                AND DeviceEvents.CreatedDate < %s
-                GROUP BY Device.DeviceID, DeviceEvents.EventType """
+    sql = """ SELECT DISTINCT Device.DeviceID FROM Device
+            INNER JOIN
+            DeviceEvents
+            ON Device.DeviceID = DeviceEvents.DeviceID
+            WHERE Device.ClientID=%s """
 
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-
-
-    today = "2018-03-02" # DEBUG
-
-
-    today_start = today + " 00:00:00"
-    today_end = today + " 23:59:59"
-
-    results = sql_select(sql, (clientId, today_start, today_end))
-
-    res, res_temp = [], {}
+    res = []
+    results = sql_select(sql, (clientId,))
 
     for row in results:
-        deviceId = row[0]
-        if not deviceId in res_temp:
-            res_temp[deviceId] = {
-                "entries": 0,
-                "exits": 0
-            }
-        if row[1] == 'entry':
-            res_temp[deviceId]["entries"] = row[2]
-        elif row[1] == 'exit':
-            res_temp[deviceId]["exits"] = row[2]
-        else:
-            print("ERROR: EventType (%s) is not valid" % row[1])
-
-    for k in res_temp:
-        res.append({
-            "DeviceId": k,
-            "Entries": res_temp[k]["entries"],
-	        "Exits": res_temp[k]["exits"]
-        })
+        res.append(row[0])
+    # print(res)
 
     return json.dumps(res)
+
+# @application.route('/GetAllClientDevices', methods=['GET'])
+# def GetAllClientDevices():
+#     """ Get all devices associated with a certain client """
+#
+#     clientId = request.args['clientId']
+#
+#     try:
+#         clientId = str(int(clientId))
+#     except ValueError:
+#         return fail_response("client_id must be an integer")
+#
+#     sql = """ SELECT Device.DeviceID, DeviceEvents.EventType, COUNT(*)
+#                 FROM Device INNER JOIN DeviceEvents
+#                 ON Device.DeviceID=DeviceEvents.DeviceID
+#                 WHERE Device.ClientID=%s
+#                 AND DeviceEvents.CreatedDate > %s
+#                 AND DeviceEvents.CreatedDate < %s
+#                 GROUP BY Device.DeviceID, DeviceEvents.EventType """
+#
+#     today = datetime.utcnow().strftime("%Y-%m-%d")
+#
+#
+#     # today = "2018-03-02" # DEBUG
+#
+#
+#     today_start = today + " 00:00:00"
+#     today_end = today + " 23:59:59"
+#
+#     results = sql_select(sql, (clientId, today_start, today_end))
+#
+#     res, res_temp = [], {}
+#
+#     for row in results:
+#         deviceId = row[0]
+#         if not deviceId in res_temp:
+#             res_temp[deviceId] = {
+#                 "entries": 0,
+#                 "exits": 0
+#             }
+#         if row[1] == 'entry':
+#             res_temp[deviceId]["entries"] = row[2]
+#         elif row[1] == 'exit':
+#             res_temp[deviceId]["exits"] = row[2]
+#         else:
+#             print("ERROR: EventType (%s) is not valid" % row[1])
+#
+#     for k in res_temp:
+#         res.append({
+#             "DeviceId": k,
+#             "Entries": res_temp[k]["entries"],
+# 	        "Exits": res_temp[k]["exits"]
+#         })
+#
+#
+#     # [{
+#     # 	'DeviceId': deviceId,
+#     # 	'Entries': entry_count,
+#     # 	'Exits': exit_count
+#     # },
+#     # {
+#     # 	'DeviceId': deviceId,
+#     # 	'Entries': entry_count,
+#     # 	'Exits': exit_count
+#     # }...]
+#
+#     return json.dumps(res)
 
 
 @application.route('/GetDeviceCount', methods=['GET'])
@@ -211,7 +237,7 @@ def GetDeviceCount():
     deviceId = request.args['deviceId']
 
     try:
-        clientId = str(int(deviceId))
+        deviceId = str(int(deviceId))
     except ValueError:
         return fail_response("device_id must be an integer")
 
@@ -222,26 +248,18 @@ def GetDeviceCount():
 
     today = datetime.utcnow().strftime("%Y-%m-%d")
 
-
-
-    today = "2018-03-02" # DEBUG
-
-
-
     today_start = today + " 00:00:00"
     today_end = today + " 23:59:59"
 
-    results = sql_select(sql, (clientId, today_start, today_end))
+    results = sql_select(sql, (deviceId, today_start, today_end))
 
     res, res_temp = [], {}
 
     for row in results:
         deviceId = row[0]
         if not deviceId in res_temp:
-            res_temp[deviceId] = {
-                "entries": 0,
-                "exits": 0
-            }
+            res_temp[deviceId] = { "entries": 0,
+                                   "exits"  : 0 }
         if row[1] == 'entry':
             res_temp[deviceId]["entries"] = row[2]
         elif row[1] == 'exit':
@@ -250,41 +268,264 @@ def GetDeviceCount():
             print("ERROR: EventType (%s) is not valid" % row[1])
 
     for k in res_temp:
-        res.append({
-            "DeviceId": k,
-            "Entries": res_temp[k]["entries"],
-	        "Exits": res_temp[k]["exits"]
-        })
+        res.append({ "DeviceId": k,
+                     "Entries" : res_temp[k]["entries"],
+        	         "Exits"   : res_temp[k]["exits"] })
 
     return json.dumps(res)
 
 
 @application.route('/GetAllDeviceCountHistory', methods=['GET'])
 def GetAllDeviceCountHistory():
-    """ parameters:
-            clientId,
-            interval,
-            startTime,
-            endTime,
-            month
+    """ parameters
+        ------------------------
+            clientId :
+            interval : ('day' | 'month' | 'year')
+            date : 'YYYY-MM-DD'
+
+                e.g. '2018-01-02'
+                  for day it would be find the day usage for '2018-01-02'
+                  and for year it would find the 2018 usage for each month
     """
+
+    clientId = request.args.get('clientId')
+    interval = request.args.get('interval')
+    specifiedDatetime = request.args.get('date') or ''
+
+    try:
+        clientId = int(clientId)
+        if interval not in ['day', 'month', 'year']:
+            return fail_response("interal must be one of the following: %s" % str(interval))
+        dt = datetime.strptime(specifiedDatetime, "%Y-%m-%d")
+    except ValueError as e:
+        return fail_response("input error: %s" % str(e))
+
+
+    # sql = """
+    # SELECT dID, ET, {0}(CD), COUNT(*) FROM
+    #     (SELECT d1.DeviceID AS dID,
+    #         DeviceEvents.CreatedDate AS CD,
+    #         DeviceEvents.EventType AS ET FROM
+    #             (SELECT DISTINCT Device.DeviceID FROM Device
+    #             INNER JOIN
+    #             DeviceEvents
+    #             ON Device.DeviceID = DeviceEvents.DeviceID
+    #             WHERE Device.ClientID=%s)d1
+    #             INNER JOIN
+    #             DeviceEvents
+    #             ON DeviceEvents.DeviceID = d1.DeviceID
+    #             WHERE DeviceEvents.CreatedDate > %s
+    #             AND DeviceEvents.CreatedDate < %s )d2
+    #     GROUP BY dID, ET, {0}(CD);
+    # """.format(interval.upper()) # use DAY(), MONTH(), or YEAR() SQL function
+
+    sql = """
+    SELECT d1.DeviceID AS dID,
+            DeviceEvents.CreatedDate AS CD,
+            DeviceEvents.EventType AS ET FROM
+                (SELECT DISTINCT Device.DeviceID FROM Device
+                  INNER JOIN
+                    DeviceEvents
+                  ON Device.DeviceID = DeviceEvents.DeviceID
+                      WHERE Device.ClientID=%s)d1
+                INNER JOIN
+                DeviceEvents
+                ON DeviceEvents.DeviceID = d1.DeviceID
+                WHERE DeviceEvents.CreatedDate > %s
+                AND DeviceEvents.CreatedDate < %s;
+    """
+
+    t_start = ""
+    t_end = ""
+    print(sql)
+
+    # "%Y-%m-%d %H:%M:%S"
+    # tb = datetime(dt.year, dt.month, dt.day, 0, 0, 0)
+
+    buckets = {}
+
+    if interval == 'day':
+        t_start = str(specifiedDatetime) + " 00:00:00"
+        t_end = str(specifiedDatetime) + " 23:59:59"
+
+        params = (clientId, t_start, t_end)
+        results = sql_select(sql, params)
+
+        num_buckets = 48
+        # create "buckets" every 30min so that when data is passed out
+        # it can easily be processed by frontend chart code
+
+        # drop results into buckets for count
+        for row in results:
+            deviceId, createdDate, eventType = row[0], row[1], row[2]
+
+            if deviceId not in buckets:
+                buckets[deviceId] = [0]*num_buckets
+
+            minutes = createdDate.minute + (createdDate.hour*60)
+            bucketLoc = int(math.floor(minutes / num_buckets))
+
+            if eventType == 'entry':
+                buckets[deviceId][bucketLoc] += 1
+
+        return json.dumps(buckets)
+
+    elif interval == 'month':
+        t_start = datetime(dt.year, dt.month, 1)
+        t_end = datetime(dt.year, dt.month+1, 1)
+
+        params = (clientId, t_start, t_end)
+        results = sql_select(sql, params)
+
+        num_buckets = monthrange(dt.year, dt.month)[1]
+        print(num_buckets)
+
+        # drop results into buckets for count
+        for row in results:
+            deviceId, createdDate, eventType = row[0], row[1], row[2]
+
+            if deviceId not in buckets:
+                buckets[deviceId] = [0]*num_buckets
+
+            days = createdDate.day-1
+            bucketLoc = int(days)
+
+            if eventType == 'entry':
+                buckets[deviceId][bucketLoc] += 1
+
+        return json.dumps(buckets)
+
+    elif interval == 'year':
+        t_start = datetime(dt.year, 1, 1)
+        t_end = datetime(dt.year+1, 1, 1)
+        # loop through months in that year
+
+        params = (clientId, t_start, t_end)
+        results = sql_select(sql, params)
+
+        num_buckets = 12
+
+        # drop results into buckets for count
+        for row in results:
+            deviceId, createdDate, eventType = row[0], row[1], row[2]
+
+            if deviceId not in buckets:
+                buckets[deviceId] = [0]*num_buckets
+
+            months = createdDate.month-1
+            bucketLoc = int(months)
+
+            if eventType == 'entry':
+                buckets[deviceId][bucketLoc] += 1
+
+        return json.dumps(buckets)
+
+    else:
+        raise Exception("fail_response should have been issued for parameter interval")
+
     return ""
+
+
+def get_buckets(results):
+    """ Return buckets from the query results
+        buckets: dictionary in the following format
+        {
+            1: [0,0,0,4,2,2,3,5,1,2,0,0],
+            ...
+        }
+        where the key is the deviceId and the array
+        is the volume of events in that interval
+        """
+    pass
 
 
 @application.route('/AddDevice', methods=['POST'])
 def AddDevice():
-    """ parameters:
-            deviceId,
-            name,
-            location,
-            MACAddress
+    """ parameters
+        ------------------------
+            deviceId :
+            name :
+            location :
+            MACAddress :
     """
-    return ""
+
+    deviceId = request.form.get('deviceId')
+    name = request.form.get('name')
+    location = request.form.get('location')
+    MACAddress = request.form.get('MACAddress')
+
+    try:
+        deviceId = str(int(deviceId))
+    except ValueError:
+        return fail_response("device_id must be an integer")
+
+    sql = """
+    INSERT INTO Device (DeviceID, CreatedBy, ClientID, Name, MACAddress, Location)
+    VALUES ( %s, 0, 1, %s, %s, %s );
+    """
+
+    try:
+        params = (deviceId, name, MACAddress, location)
+        sql_insert(sql, params)
+    except Exception as e:
+        return fail_response(e)
+
+    return success_response()
+
 
 @application.route('/AddUser', methods=['POST'])
 def AddUser():
-    """  """
-    return ""
+    """  INT clientId,
+		STRING username,
+		STRING firstName,
+        STRING lastName,
+        STRING email,
+        STRING homePhone,
+        STRING mobilePhone,
+        STRING workPhone,
+        STRING ext
+         """
+    clientId = request.form.get('clientId')
+    username = request.form.get('username')
+    firstName = request.form.get('firstName')
+    lastName = request.form.get('lastName')
+    email = request.form.get('email')
+    homePhone = request.form.get('homePhone')
+    mobilePhone = request.form.get('mobilePhone')
+    workPhone = request.form.get('workPhone')
+    ext = request.form.get('ext')
+
+    try:
+        clientId = str(int(clientId))
+    except ValueError:
+        return fail_response("clientId must be an integer")
+
+    sql = """
+    INSERT INTO Client
+        (
+        `ClientID`,
+        `IndustryID`,
+        `Name`,
+        `Address1`,
+        `Address2`,
+        `City`,
+        `State`,
+        `ZipCode`,
+        `ContactName`,
+        `ContactEmail`,
+        `ContactPhone`,
+        `TimeZoneID`
+        )
+    VALUES ( %s, 0, '',);
+    """
+
+    try:
+        params = (deviceId, name, MACAddress, location)
+        sql_insert(sql, params)
+    except Exception as e:
+        return fail_response(e)
+
+    return success_response()
 
 
 @application.route('/GetBusinessHours', methods=['GET'])
@@ -297,6 +538,13 @@ def GetBusinessHours():
 def UpdateBusinessHours():
     """  """
     return ""
+
+
+
+
+# ENDPOINT TO AUTHENTICATE USERS
+
+
 
 
 # @application.route('/GetCurrentOccupantsCount', methods=['GET'])
@@ -364,6 +612,10 @@ def UpdateBusinessHours():
 
 
 
+
+
+
+
 ######################
 ## Helper functions ##
 ######################
@@ -375,14 +627,12 @@ def sql_insert(sql_str, params=None):
     try:
         conn = mdb.connect(*creds) # unpack creds into params
         cursor = conn.cursor()
-        # NOTE: this syntax sanitizes the input for SQL injection
-        if params:
-            cursor.execute(sql_str, params)
-        else:
-            cursor.execute(sql_str)
+        cursor.execute(sql_str, params)
         conn.commit()
     except mdb.Error, e:
-        print("SQL INSERT Error %d: %s" % (e.args[0],e.args[1]))
+        err_str = "SQL INSERT Error %d: %s" % (e.args[0],e.args[1])
+        print(err_str)
+        raise Exception(err_str)
     finally:
         if conn:
             conn.close()
@@ -396,16 +646,11 @@ def sql_select(sql_str, params=None):
     try:
         conn = mdb.connect(*creds) # unpack creds into params
         cursor = conn.cursor()
-        if params:
-            cursor.execute(sql_str, params)
-            results = cursor.fetchall()
-        else:
-            cursor.execute(sql_str)
-            results = cursor.fetchall()
+        cursor.execute(sql_str, params)
+        results = cursor.fetchall()
     except mdb.Error, e:
         print("SQL SELECT Error %d: %s" % (e.args[0],e.args[1]))
-        # THROW EXCEPTION
-        # return "SQL SELECT Error %d: %s" % (e.args[0],e.args[1])
+        # TODO: THROW EXCEPTION
     finally:
         if conn:
             conn.close()
@@ -415,7 +660,7 @@ def sql_select(sql_str, params=None):
 
 def verify_token(t):
     """ Verify authorization token """
-    # TODO: Complete auth
+    # TODO: Complete authentication functionality
     return True
 
 

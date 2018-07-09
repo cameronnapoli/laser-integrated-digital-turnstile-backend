@@ -1,6 +1,6 @@
-# Flask API for LIDT
-#
-# Written by: Cameron Napoli
+# Flask API for Laser Integrated Digital Turnstile (LIDT)
+#   Created on: 2017-12-21
+#   Written by: Cameron Napoli
 
 from flask import Flask, abort, request
 from flask_cors import CORS, cross_origin
@@ -8,14 +8,18 @@ from functools import wraps
 import MySQLdb as mdb
 from datetime import datetime, timedelta
 from calendar import monthrange
-import sys, os, json, math
+import sys
+import os
+import json
+import math
 
 
 application = Flask(__name__)
 CORS(application) # allow cross-origin requests
 
-err_msg = "Invalid Endpoint"
-unauth_str = "Unauthorized"
+ERR_MSG = "Invalid Endpoint"
+UNAUTH_STR = "Unauthorized"
+
 def fail_response(msg):
     return json.dumps({ "success": False,
                         "error"  : str(msg) })
@@ -34,14 +38,14 @@ def auth_required(f):
         token = request.headers.get('auth-token')
         print("token: %s" % (token,)) # DEBUG
         if not verify_token(token):
-            return unauth_str
+            return UNAUTH_STR
         return f(*args, **kwargs)
     return decorated
 
 
 @application.route("/")
 def default():
-    return err_msg
+    return ERR_MSG
 
 
 @application.route("/gen_auth_token", methods=['POST'])
@@ -53,13 +57,11 @@ def gen_auth_token():
 @application.route('/register_event', methods=['POST'])
 @auth_required
 def register_event():
-    """ Register event (either 'entry' or 'exit')
-        from a user device """
-    # TODO: token based authentication
+    """ Register event (either 'entry' or 'exit') from a user device """
     try:
         data = json.loads(request.data)
         event_type = data['eventType']
-        device_Id = data['deviceID']
+        device_Id  = data['deviceID']
     except ValueError as e:
         return "JSON malformed (JSON cannot be decoded)"
     except KeyError as e:
@@ -67,8 +69,7 @@ def register_event():
 
     creds = fetch_credentials()
 
-    sql = ("""INSERT INTO `DeviceEvents`
-            (`DeviceID`, `EventType`)
+    sql = ("""INSERT INTO `DeviceEvents` (`DeviceID`, `EventType`)
             VALUES (%s, %s); """)
 
     sql_insert(sql, (device_Id, event_type))
@@ -148,8 +149,7 @@ def GetAllClientDevices():
         return fail_response("client_id must be an integer")
 
     sql = """ SELECT DISTINCT Device.DeviceID FROM Device
-            INNER JOIN
-            DeviceEvents
+            INNER JOIN DeviceEvents
             ON Device.DeviceID = DeviceEvents.DeviceID
             WHERE Device.ClientID=%s """
 
@@ -158,76 +158,8 @@ def GetAllClientDevices():
 
     for row in results:
         res.append(row[0])
-    # print(res)
 
     return json.dumps(res)
-
-# @application.route('/GetAllClientDevices', methods=['GET'])
-# def GetAllClientDevices():
-#     """ Get all devices associated with a certain client """
-#
-#     clientId = request.args['clientId']
-#
-#     try:
-#         clientId = str(int(clientId))
-#     except ValueError:
-#         return fail_response("client_id must be an integer")
-#
-#     sql = """ SELECT Device.DeviceID, DeviceEvents.EventType, COUNT(*)
-#                 FROM Device INNER JOIN DeviceEvents
-#                 ON Device.DeviceID=DeviceEvents.DeviceID
-#                 WHERE Device.ClientID=%s
-#                 AND DeviceEvents.CreatedDate > %s
-#                 AND DeviceEvents.CreatedDate < %s
-#                 GROUP BY Device.DeviceID, DeviceEvents.EventType """
-#
-#     today = datetime.utcnow().strftime("%Y-%m-%d")
-#
-#
-#     # today = "2018-03-02" # DEBUG
-#
-#
-#     today_start = today + " 00:00:00"
-#     today_end = today + " 23:59:59"
-#
-#     results = sql_select(sql, (clientId, today_start, today_end))
-#
-#     res, res_temp = [], {}
-#
-#     for row in results:
-#         deviceId = row[0]
-#         if not deviceId in res_temp:
-#             res_temp[deviceId] = {
-#                 "entries": 0,
-#                 "exits": 0
-#             }
-#         if row[1] == 'entry':
-#             res_temp[deviceId]["entries"] = row[2]
-#         elif row[1] == 'exit':
-#             res_temp[deviceId]["exits"] = row[2]
-#         else:
-#             print("ERROR: EventType (%s) is not valid" % row[1])
-#
-#     for k in res_temp:
-#         res.append({
-#             "DeviceId": k,
-#             "Entries": res_temp[k]["entries"],
-# 	        "Exits": res_temp[k]["exits"]
-#         })
-#
-#
-#     # [{
-#     # 	'DeviceId': deviceId,
-#     # 	'Entries': entry_count,
-#     # 	'Exits': exit_count
-#     # },
-#     # {
-#     # 	'DeviceId': deviceId,
-#     # 	'Entries': entry_count,
-#     # 	'Exits': exit_count
-#     # }...]
-#
-#     return json.dumps(res)
 
 
 @application.route('/GetDeviceCount', methods=['GET'])
@@ -299,25 +231,6 @@ def GetAllDeviceCountHistory():
         dt = datetime.strptime(specifiedDatetime, "%Y-%m-%d")
     except ValueError as e:
         return fail_response("input error: %s" % str(e))
-
-
-    # sql = """
-    # SELECT dID, ET, {0}(CD), COUNT(*) FROM
-    #     (SELECT d1.DeviceID AS dID,
-    #         DeviceEvents.CreatedDate AS CD,
-    #         DeviceEvents.EventType AS ET FROM
-    #             (SELECT DISTINCT Device.DeviceID FROM Device
-    #             INNER JOIN
-    #             DeviceEvents
-    #             ON Device.DeviceID = DeviceEvents.DeviceID
-    #             WHERE Device.ClientID=%s)d1
-    #             INNER JOIN
-    #             DeviceEvents
-    #             ON DeviceEvents.DeviceID = d1.DeviceID
-    #             WHERE DeviceEvents.CreatedDate > %s
-    #             AND DeviceEvents.CreatedDate < %s )d2
-    #     GROUP BY dID, ET, {0}(CD);
-    # """.format(interval.upper()) # use DAY(), MONTH(), or YEAR() SQL function
 
     sql = """
     SELECT d1.DeviceID AS dID,
@@ -542,76 +455,7 @@ def UpdateBusinessHours():
 
 
 
-# ENDPOINT TO AUTHENTICATE USERS
-
-
-
-
-# @application.route('/GetCurrentOccupantsCount', methods=['GET'])
-# def GetCurrentOccupantsCount():
-#     """ Get the number of people in location on this day
-#         (inCount - outCount) """
-#     clientId = request.args['client_id']
-#     today = datetime.utcnow().strftime("%Y-%m-%d")
-#     today_start = today + " 00:00:00"
-#     today_end = today + " 23:59:59"
-#
-#     sql = """
-#     SELECT `DeviceEvents`.`EventType`
-#     FROM `Device`
-#     INNER JOIN `DeviceEvents`
-#     ON `Device`.`DeviceID`=`DeviceEvents`.`DeviceID`
-#       WHERE `Device`.`ClientID`=%s
-#         AND `DeviceEvents`.`CreatedDate` > %s
-#         AND `DeviceEvents`.`CreatedDate` < %s;
-#     """
-#
-#     results = sql_select(sql, (clientId, today_start, today_end))
-#     exit_count, entry_count, incrt_count = 0, 0, 0
-#
-#     for row in results:
-#         eventType = row[0]
-#         if eventType == 'entry':
-#             entry_count += 1
-#         elif eventType == 'exit':
-#             exit_count += 1
-#         else:
-#             incrt_count += 1
-#
-#
-#     num_people = entry_count - exit_count
-#
-#     success = 1
-#     if num_people < 0:
-#         success = 0
-#
-#     ret = {
-#         'date': today,
-#         'success' : success,
-#         'num_people': num_people,
-#         'entries': entry_count,
-#         'exits': exit_count
-#     }
-#
-#     return json.dumps(ret)
-
-
-# @application.route('/GetDeviceStatus', methods=['GET'])
-# def GetDeviceStatus(deviceId):
-#     """ Get information about device/battery percent """
-#     pass
-
-# @application.route('/DeviceInBusinessHours', methods=['GET'])
-# def DeviceInBusinessHours(deviceId):
-#     """ Request to check if a device is in business hours
-#         deviceId: int
-#     """
-#     pass
-#     # reference device with associated client
-#     # then check `ClientBusinessHours` table to see if device in business hours
-
-
-
+# TODO: ENDPOINT TO AUTHENTICATE USERS
 
 
 

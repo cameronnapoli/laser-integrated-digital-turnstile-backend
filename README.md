@@ -1,4 +1,4 @@
-# senior-design-backend
+# Senior Design Backend - Laser Integrated Digital Turnstile system (LIDT)
 REST API for senior design project. Written using the Python Flask framework.
 
 ## Dependencies

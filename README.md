@@ -15,6 +15,7 @@ Run on localhost:5000 with:
 python application.py
 ```
 
+
 ## API Endpoints
 
 ### Generate Auth Token

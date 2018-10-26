@@ -16,7 +16,7 @@ python application.py
 ```
 
 <br />
-<br />
+
 # API Endpoints
 
 ## Generate Auth Token

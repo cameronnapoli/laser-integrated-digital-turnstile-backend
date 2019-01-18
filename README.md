@@ -1,4 +1,7 @@
 # Senior Design Backend - Laser Integrated Digital Turnstile system (LIDT)
+
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
 REST API for senior design project. Written using the Python Flask framework.
 
 ## Dependencies

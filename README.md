@@ -1,8 +1,8 @@
-# Senior Design Backend - Laser Integrated Digital Turnstile system (LIDT)
+# Laser Integrated Digital Turnstile System (LIDT)
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-REST API for senior design project. Written using the Python Flask framework.
+REST API for laser integrated digital turnstile system used to track pedestrian traffic. Written using the Python Flask framework.
 
 ## Dependencies
 
@@ -13,9 +13,14 @@ REST API for senior design project. Written using the Python Flask framework.
 
 ## Usage
 
-Run on localhost:5000 with:
+Run on localhost:80 with:
 ```
 python application.py
+```
+
+To run pointing to localhost db and on localhost:5000 use 
+```
+python application.py --debug
 ```
 
 <br />

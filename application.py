@@ -9,8 +9,7 @@ from datetime import datetime, timedelta
 from calendar import monthrange
 import sys, json, math
 
-from helpers import fail_response, success_response, \
-                    verify_token, fetch_credentials, set_debug_db
+from helpers import fail_response, success_response, verify_token, fetch_credentials, set_debug_db
 from sql_helpers import sql_insert, sql_select
 
 application = Flask(__name__)
@@ -334,7 +333,7 @@ if __name__ == "__main__":
     port_num = 80
 
     if len(sys.argv) > 1:
-        if sys.argv[1] == '-debug':
+        if sys.argv[1] == '--debug':
             set_debug_db()
             port_num = 5000
 

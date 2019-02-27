@@ -4,6 +4,8 @@
 
 REST API for laser integrated digital turnstile system used to track pedestrian traffic. Written using the Python Flask framework.
 
+![laser device](laser-device.jpg)
+
 ## Dependencies
 
 * Flask 0.12.2
